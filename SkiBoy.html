@@ -1,0 +1,778 @@
+<!--
+	Skyboy Game
+
+	Is an One File Game.
+	You have to follow the track (down hill) until finish line.
+	
+	Everthing in this game is made here. Track, Trees, Player, etc.
+
+-->
+<html>
+<head>
+<style type='text/css'>
+canvas{
+	margin:0px;
+	padding:0px;
+	background-color: #FFFFFF;
+}
+</style>
+</head>
+<body onload="drawGameMenu()" style="margin:0px;padding:0px;overflow:hidden">
+	<canvas id="canvas" width="800" height="600"></canvas>	
+
+
+	<script type='text/javascript'>
+		//Game variables
+		
+		var canvas = document.getElementById('canvas');
+		var ctx = canvas.getContext("2d");
+		
+		//audio
+		let context = new AudioContext();
+
+		
+		var animationID = '';
+		
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+		
+		var gameStarted = false;
+		var gameFinished = false;
+		
+		
+		//Controle FTS
+		var currentTime = 0;
+		var dt  = 0;
+		var oldTime = 0;
+		
+		var LEFT=-1;
+		var RIGHT=1;
+		
+		var track ={
+			flags: [],
+			totalFlags:600,
+			width:250,
+			trees:[]
+		};
+		
+		//player
+		var player = {		  
+			x:0,
+			y:0,
+			score:0,
+			direction:RIGHT,
+			scale:0.4
+		};
+		
+		//tree colors
+		var treeColor = [];
+		treeColor.push({"bottom":"#2e5d2f","middle":"#4c8a4e","top":"#91cb8b"});//green
+		treeColor.push({"bottom":"#1a4776","middle":"#356da6","top":"#a2c8ef"});//blue
+		treeColor.push({"bottom":"#91483f","middle":"#c17048","top":"#eab69c"});//orange
+		
+		//keyboard controls
+		var keyboard= {
+			LEFT: false, 
+			RIGHT: false
+		};
+		var KEY = {
+			LEFT:     37,
+			RIGHT:    39,
+			ENTER:    13
+		  };
+		//add the keyboard events
+		document.addEventListener('keydown', keyDown, false);
+		document.addEventListener('keyup',   keyUp, false);
+		
+		var touchX = 0;
+		var lastTouchX = 0;
+		
+		canvas.addEventListener('touchstart', touchStart, false);
+		canvas.addEventListener('touchmove', touchMove, false);
+		canvas.addEventListener('touchend', touchEnd, false);
+		
+		/*
+		Called onload page
+		*/
+		function drawGameMenu()
+		{
+			ctx.save();
+			ctx.shadowColor 	= "blue";
+			ctx.shadowOffsetX 	= 0; 
+			ctx.shadowOffsetY 	= 0;
+			ctx.shadowBlur 		= 25;
+			ctx.font 			= "80px Arial";
+			ctx.fillStyle 		= "gray";
+			ctx.fillText("SKI-BOY", canvas.width/2-150, 100);
+			
+			ctx.shadowColor 	= "green";
+			ctx.font 			= "30px Consolas";
+			ctx.fillStyle 		= "gray";		
+			
+			ctx.fillText("Press Enter", canvas.width/2-80, 280);
+			ctx.restore();
+			
+			drawSkiBoy(canvas.width/2, 220,RIGHT,0.4);
+
+			
+				
+		}
+		
+		/*
+		Function responsible for start the game (from Enter on Menu)
+		Create the track list e flags (random).
+		*/
+		function startGame()
+		{	
+			beep(400,1000,50);
+			
+			currentTime = getCurrentTime();
+			oldTime = currentTime;
+			
+			gameStarted = true;
+			gameFinished = false;
+			
+			track.flags=[];
+			track.trees=[];
+			
+			player.x = canvas.width/2;
+			player.y = 150;
+			player.score = track.totalFlags;
+			
+			
+			createTrack();
+			
+			//start the game loop
+			animationID = requestAnimationFrame(gameLoop);
+		}
+		function finishGame()
+		{
+			gameStarted = false;
+			gameFinished = true;
+			beep(200,2000,50);
+			
+			
+		}
+		
+		function createTrack()
+		{
+			var direction = RIGHT;
+			var flagX = canvas.width/2 - track.width/2; //start x: centre
+			var flagY = canvas.height;					//start y: end of screen
+			var rand = 0;
+			
+			for(var i =0; i < track.totalFlags; i++)
+			{
+				if(i%20==0)
+				{
+					rand = Math.random() * 100;//entre 0 a 100
+				
+					if(rand < 50)	
+						direction = LEFT;
+					else
+						direction = RIGHT;
+				}
+				
+				//if x is grater than screen limit on the right and the direction is RIGHT, change the direction
+				if(flagX + track.width+30 > canvas.width && direction ==RIGHT)
+					direction = LEFT;
+				else //if x is less than minimum limit on the left screen and the direction is LEFT, change the direction.
+					if(flagX < 30 && direction == LEFT)
+						direction = RIGHT;
+				
+				//add 10 to LEFT or to RIGHT (direction).
+				flagX += 10*direction;
+				
+				//add 10 to bottom
+				flagY += 10;
+				
+				//add the flag list
+				track.flags.push({"x":flagX,"y":flagY,"out":false});
+				
+				//add the trees
+				if(i%10==0)
+				{
+					createTree(flagX,flagY);
+				}
+				
+			}
+		
+		}
+		/*
+		Create a tree in a random position next to the track (sometimes before the track, sometimes after de track)
+		Uses randomicly 3 options for color and 3 options for scale
+		*/
+		function createTree(flagX,flagY)
+		{
+			var color = 1;
+			var scale = 0.6;
+			var x = flagX-35;
+				
+			var randPos = Math.random() * 100;//between 0 and 100
+			if(randPos < 40)
+				x = flagX + track.width + 40;
+			else 
+			if(randPos > 40 && randPos < 70)
+				x = flagX - 80;
+			
+			var randScale = Math.random() * 100;//between 0 and 100
+			if(randScale < 40)
+				scale = 0.7;
+			else 
+			if(randScale > 40 && randScale < 70)
+				scale = 0.9;
+			
+			var randCor = Math.random() * 100;//between 0 and 100
+			if(randCor < 40)
+				color = 2;
+			else 
+			if(randCor > 40 && randCor < 70)
+				color = 0;
+			
+			track.trees.push({"x":x,"y":flagY,'scale':scale,'color':color});
+			
+		}
+		
+		/*
+		gameLoop run at each frame
+		*/
+		function gameLoop() 
+		{
+			//get the current time
+			currentTime = getCurrentTime();
+
+			//calculate the delta time
+			dt = currentTime - oldTime;
+			
+			updateGame(dt);
+			drawGame();
+			
+			oldTime = currentTime;
+
+			animationID = requestAnimationFrame(gameLoop);  
+		}
+		
+		
+		/*
+		update the game variables
+		*/
+		function updateGame(dt)
+		{
+			if(gameFinished==true)
+				return;
+			
+			//passed for the finish line
+			var lastFlag = track.flags.length-1;
+			if(track.flags[lastFlag].y+20 < player.y)
+			{
+				finishGame();
+				return;
+			}
+			
+			var speed = ajustSpeed(dt,300);
+			
+			player.direction =0.2;
+			if(keyboard.LEFT==true)
+			{			
+				player.x -= speed;
+				player.direction =LEFT;
+			}
+			if(keyboard.RIGHT==true)
+			{
+				player.x += speed;
+				player.direction =RIGHT;
+			}
+			
+			//move track to up
+			for (var i = 0; i < track.flags.length; i++) 
+			{
+				track.flags[i].y -= speed;
+				if(track.flags[i].out == false && checkOutOfTrack(track.flags[i].x , track.flags[i].y)==true)
+				{
+					track.flags[i].out = true;
+					player.score--;
+					beep(180,10,100);
+				}
+			}
+			
+			//move trees to up
+			for(var i = 0,s=track.trees.length; i < s; i++)
+			{
+				track.trees[i].y -= speed;
+			}
+		}
+		
+		function checkOutOfTrack(flagX,flagY)
+		{
+			//player is before flag
+			if(player.y < flagY)
+				return false;
+			//player is after flag 
+			if(player.y > flagY+10)
+				return false;
+			
+			//player is vertical align with flag 
+			
+			//player is befor track
+			if(player.x < flagX)
+				return true;
+				
+			//player is after track
+			if(player.x > flagX + track.width)
+				return true;
+			
+			return false;
+		}
+		/*
+		Draw the ghe
+		*/
+		function drawGame()
+		{
+			//clear the screen 
+			clearScreen();
+			
+			if(gameFinished==true)
+			{
+				drawFinishGame();
+				return;
+			}
+			drawFlags();
+			drawStartEndText();
+			drawPlayer();
+			
+			drawTrees();
+		}
+		
+
+		/*
+		Clear the screen to draw again.
+		*/
+		function clearScreen()
+		{
+			canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+		}
+		
+		
+		function drawFlags()
+		{
+			//default color for flag.
+			var color = "#ffca8c";
+			
+			for (var i = 0, s=track.flags.length; i < s; i++) 
+			{
+				//check if the flag is visible on screen. If not -> don't draw.
+				if(track.flags[i].y > canvas.height || track.flags[i].y <0)
+					continue;
+				
+				//if player is out of limits draw flag with red color.
+				if(track.flags[i].out==true)
+					color = "red";
+				else
+					color = "#ffca8c";//orange
+				//draw the left flag
+				ctx.beginPath();
+				ctx.lineWidth = "4";
+				ctx.strokeStyle = color;
+				ctx.arc(track.flags[i].x, track.flags[i].y, 10, 0, 2 * Math.PI);
+				ctx.stroke();
+				
+				//draw the right flag
+				ctx.beginPath();
+				ctx.lineWidth = "4";
+				ctx.strokeStyle = color;
+				ctx.arc(track.flags[i].x + track.width, track.flags[i].y, 10, 0, 2 * Math.PI);
+				ctx.stroke();
+			}
+		}
+		/*
+		Draw the player.
+		*/
+		function drawPlayer()
+		{
+			drawSkiBoy(player.x, player.y,player.direction,player.scale);
+		}
+		
+		/*
+		Desenha o texto Start/Finish no inicio e no final da track.
+		*/
+		function drawStartEndText()
+		{
+			ctx.save();
+			ctx.shadowColor = "green";
+			ctx.shadowOffsetX = 0; 
+			ctx.shadowOffsetY = 0;
+			ctx.shadowBlur = 25;
+			ctx.fillStyle = "gray";
+			ctx.font = "30px Consolas";
+			
+			//draw Start text before first flag
+			ctx.fillText("Start", track.flags[0].x+track.width/2-50, track.flags[0].y-20);
+			
+			//draw Finish text after last flag.
+			ctx.fillText("Finish", track.flags[track.flags.length-1].x+track.width/2-50, track.flags[track.flags.length-1].y+30);
+			
+			ctx.restore();
+		}
+		
+		function drawFinishGame()
+		{
+			if(gameFinished==false)
+				return;
+			drawGameMenu();
+			
+			ctx.save();
+			ctx.shadowColor = "red";
+			ctx.shadowOffsetX = 0; 
+			ctx.shadowOffsetY = 0;
+			ctx.shadowBlur = 25;
+			ctx.fillStyle = "gray";
+			
+			ctx.font = "40px Consolas";
+			ctx.fillText("Score: "+player.score+" de "+track.totalFlags+" flags", canvas.width/2-250, canvas.height/2);
+			
+			ctx.restore();
+
+			
+		}
+		
+		function drawTrees()
+		{
+			for(var i = 0,s=track.trees.length;i<s;i++)
+			{
+				drawTree(track.trees[i].x , track.trees[i].y, track.trees[i].scale,track.trees[i].color);
+			}
+		}
+		function drawTree(x , y, scale,nrcolor)
+		{
+			ctx.strokeStyle = "#6c4848";//brown
+			ctx.fillStyle = "#6c4848";	//brown
+			
+			//put the trunk tree in the middle of tree: x - half width of trunk tree.
+			ctx.fillRect(x - 20/2 * scale, y, 20*scale, 40*scale); 
+			
+			ctx.strokeStyle = treeColor[nrcolor].bottom;
+			ctx.fillStyle   = treeColor[nrcolor].bottom;
+			drawTriangle(x,y,scale);
+			
+			ctx.strokeStyle =  treeColor[nrcolor].middle;
+			ctx.fillStyle   =  treeColor[nrcolor].middle;
+			drawTriangle(x, y-50 * scale, scale*0.7);
+			
+			ctx.strokeStyle =  treeColor[nrcolor].top;
+			ctx.fillStyle   = treeColor[nrcolor].top;
+			drawTriangle(x, y-100 * scale, scale*0.4);
+			
+		}
+		function drawTriangle(x,y,scale)
+		{
+			ctx.beginPath();
+			ctx.moveTo(x-100*scale, y);
+			ctx.lineTo(x, y-100*scale);
+			ctx.lineTo(x+100*scale, y);
+			ctx.lineTo(x-100*scale, y);
+			ctx.fill();
+			ctx.stroke();
+		}
+		
+		
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Skiboy ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+		function drawSkiBoy(x,y,direction,scale)
+		{
+			ctx.save();
+			ctx.shadowColor = "red";
+			ctx.shadowOffsetX = 0; 
+			ctx.shadowOffsetY = 0;
+			ctx.shadowBlur = 15;
+			ctx.fillStyle = "white";
+			
+			drawSki(x, y,scale,RIGHT,direction);
+			drawSki(x, y,scale,LEFT,direction);
+			
+			
+			drawLeg( x, y,scale,RIGHT,direction);
+			drawLeg( x, y,scale,LEFT,direction);
+			
+			drawArm( x, y,scale,RIGHT);
+			drawArm( x, y,scale,LEFT);
+			
+			drawPole( x, y,scale,RIGHT);
+			drawPole( x, y,scale,LEFT);
+			
+			drawChest( x, y,scale);
+			drawHead( x, y,scale);
+			
+			ctx.restore();
+			
+			
+		}
+		
+		
+		function drawSki(x, y,scale,lado,direction)
+		{
+			var lineWidth = 14*scale;
+			
+			dir = new Vector(-0.5*direction,-0.5);
+			dir.normalize();
+			
+			var p1 = new Vector(x+20*scale*lado,y);//space between legs 20
+			var p2 = p1.clone();
+			p2.x -= dir.x*80*scale;
+			p2.y -= dir.y*80*scale;
+			
+			//same direction
+			var p3 = p1.clone();
+			p3.x += dir.x*80*scale;
+			p3.y += dir.y*80*scale;
+			
+			ctx.lineWidth = lineWidth;
+			ctx.strokeStyle = "purple";
+			
+			ctx.beginPath();
+			
+			ctx.moveTo(p1.x, p1.y);			
+			ctx.lineTo(p2.x, p2.y);
+			
+			ctx.moveTo(p1.x, p1.y);			
+			ctx.lineTo(p3.x, p3.y);
+			ctx.stroke();
+			
+		}
+		function drawLeg(x, y,scale,lado,direction)
+		{
+			var lineWidth = 8*scale;
+			
+			var dir = new Vector(0.2*direction,-1);
+			dir.normalize();
+			
+			var p1 = new Vector(x+20*scale*lado,y);//space between legs 20
+			var p2 = p1.clone();
+			p2.x+=dir.x*50*scale;
+			p2.y+=dir.y*50*scale;
+			
+			dir = new Vector(-0.2*direction,-1);
+			dir.normalize();
+			
+			var p3 = p2.clone();
+			p3.x+=dir.x*50*scale;
+			p3.y+=dir.y*50*scale;
+			
+			ctx.lineWidth = lineWidth;
+			ctx.strokeStyle = "#404040";
+			
+			ctx.beginPath();
+			
+			ctx.moveTo(p1.x, p1.y);			
+			ctx.lineTo(p2.x, p2.y);
+			ctx.lineTo(p3.x, p3.y);
+			ctx.stroke();
+			
+		}
+		
+		function drawArm(x, y,scale,lado)
+		{
+			var dir = new Vector(0.5*lado,-0.3);
+			dir.normalize();
+			
+			var p1 = new Vector(x+30*scale*lado,y-180*scale);
+			var p2 = p1.clone();
+			p2.x += dir.x*50*scale;
+			p2.y += dir.y*50*scale;
+			
+			ctx.lineWidth = 8*scale;
+			ctx.strokeStyle = "#404040";
+			ctx.beginPath();
+			ctx.moveTo(p1.x, p1.y);			
+			ctx.lineTo(p2.x, p2.y);
+			ctx.stroke();
+		
+		}
+		function drawPole(x, y,scale,lado)
+		{
+			var dir = new Vector(0.5*lado,-0.3);
+			dir.normalize();
+			
+			var p1 = new Vector(x+30*scale*lado,y-180*scale);
+			p1.x += dir.x*25*scale;
+			p1.y += dir.y*25*scale;
+			
+			var p2 = p1.clone();
+			dir = new Vector(0.2*lado,-1);
+			dir.normalize();
+			
+			p2.x += dir.x*15*scale;
+			p2.y += dir.y*15*scale;
+			
+			dir = new Vector(0.2*lado,1);
+			dir.normalize();
+			
+			var p3 = p2.clone();
+			p3.x += dir.x*220*scale;
+			p3.y += dir.y*220*scale;
+			
+			ctx.lineWidth = 4*scale;
+			ctx.strokeStyle = "gray";
+			
+			ctx.beginPath();
+			ctx.moveTo(p2.x, p2.y);			
+			ctx.lineTo(p3.x, p3.y);
+			ctx.stroke();
+		}
+		function drawChest(x, y,scale)
+		{
+			var w = Math.floor(60*scale);
+			var h = Math.floor(80*scale);
+			var xt = x-30*scale;//half width of chest
+			var yt = y-180*scale;//50 each leg + 80 of height of chest 
+			
+			ctx.fillStyle = "#404040";
+			ctx.fillRect(xt,yt, w, h); 
+		}
+		
+		function drawHead(x, y,scale)
+		{
+			var raio = Math.floor(30*scale);//half width of chest
+			var xcabeca = x;
+			var ycabeca = y-220*scale; //50 each leg + 80 of height of chest + half head (radius) + 10 of space
+			
+			ctx.beginPath();
+			ctx.lineWidth = "4";
+			ctx.strokeStyle = "#404040";
+			ctx.fillStyle = "gray";
+			ctx.arc(xcabeca, ycabeca, raio, 0, 2 * Math.PI);
+			ctx.fill();
+			ctx.stroke();
+		}
+		/*
+		Vector 2D class
+		*/
+		function Vector(x,y){
+			this.x=x,
+			this.y=y,
+			
+			this.getNormal= function(){
+				return (Math.sqrt((this.x*this.x)+(this.y*this.y)));
+			},
+				
+			this.normalize= function(){
+				var norm = this.getNormal();
+				this.x /= norm;
+				this.y /= norm;
+			},
+			
+			this.clone= function(){
+				return new Vector(this.x,this.y);
+			}
+		}
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Input date ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		function keyDown(ev) 
+		{
+			handleKeyboard(ev, ev.keyCode, true);
+		}
+		function keyUp(ev)
+		{
+			handleKeyboard(ev, ev.keyCode, false);
+		}
+		
+		function handleKeyboard(ev, key, pressed) 
+		{
+			switch(key) 
+			{
+				case KEY.LEFT:  keyboard.LEFT  = pressed; ev.preventDefault(); break;
+				case KEY.RIGHT: keyboard.RIGHT   = pressed; ev.preventDefault(); break;
+				case KEY.ENTER: 
+					if(gameStarted==false)
+						startGame();
+					ev.preventDefault(); //prevent dispatch of double event 
+					break;
+			}
+		}
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TOUCH ~~~~~~~~~~~~~~~~~
+		
+		function touchStart() 
+		{
+			
+			getTouchPos();
+			if(gameStarted==false)
+				startGame();
+
+			event.preventDefault();//prevent dispatch of double event 
+		}
+		
+		function touchEnd() 
+		{
+			keyboard.LEFT=false;
+			keyboard.RIGHT=false;
+			
+			event.preventDefault();//prevent dispatch of double event 
+		}
+
+		function touchMove(e) 
+		{ 
+			getTouchPos();
+			
+			event.preventDefault();//prevent scroll when touch  
+		}
+
+		// get the relative position of top and left canvas.
+		function getTouchPos(e) 
+		{
+			if (!e)
+				var e = event;
+
+			if (e.touches) 
+			{
+				var touch = e.touches[e.touches.length-1]; //lat touch
+				touchX = touch.pageX - touch.target.offsetLeft;
+				if(lastTouchX > 0)
+				{
+					if(touchX < lastTouchX)
+					{
+						keyboard.LEFT  = true;
+						keyboard.RIGHT  = false;
+					}
+					else if(touchX > lastTouchX)
+					{
+						keyboard.LEFT  = false;
+						keyboard.RIGHT  = true;
+					}
+				}
+				lastTouchX = touchX;
+					
+			}
+		}
+		
+		
+		//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+		/*
+		the requestAnimationFrame we have our loop asynchronous (to avoid block browser). 
+		However this not guarantee the exact frequency will be executed.
+		In the modern browsers can be close to 60 (FPS), but can be more or less. 
+		Because of that we use timestamp to measure the time between one and another call
+		*/
+		function getCurrentTime() {
+		  return window.performance && window.performance.now ? window.performance.now() : new Date().getTime();//em navegadores modernos funciona melhor o window.performance
+		}
+		
+		/*
+		Ajust the speed to rate of update (FPS)
+		*/
+		function ajustSpeed(delta, speed) {
+			return ((speed * delta) / 1000);//in seconds
+		}
+
+		const beep = (freq = 520, duration = 200, vol = 100) => {
+			const oscillator = context.createOscillator();
+			const gain = context.createGain();
+			oscillator.connect(gain);
+			oscillator.frequency.value = freq;
+			oscillator.type = "sine";
+			gain.connect(context.destination);
+			gain.gain.value = vol * 0.01;
+			oscillator.start(context.currentTime);
+			oscillator.stop(context.currentTime + duration * 0.001);
+		}
+
+		
+	</script>
+</body>
+</html>
