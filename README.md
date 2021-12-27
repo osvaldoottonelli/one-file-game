@@ -12,7 +12,7 @@ You have to follow the track (down hill) until finish line.
 - Everthing in this game is with just one html file. Track, Trees, Player, sound, etc.
 - This is a simple game, but was really good to coded.
 
-_ps: This is not a proffessional game. Just a simple game made in html + js._
+_ps: This is not a professional game. Just a simple game made in html + js._
 
 ## Need help?
 
